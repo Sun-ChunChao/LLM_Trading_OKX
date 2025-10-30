@@ -27,34 +27,62 @@ load_dotenv()
 
 
 class TradingConfig:
-    """交易配置类 - 集中管理所有配置参数"""
+    """
+    交易配置类 - 集中管理所有配置参数
+    
+    功能说明：
+    - 管理交易对、杠杆、时间周期等基础配置
+    - 管理AI分析相关配置
+    - 管理智能仓位管理系统配置
+    - 所有配置集中在一处，方便统一管理和修改
+    """
 
     def __init__(self):
-        self.symbol = 'BTC/USDT:USDT'
-        self.leverage = 10
-        self.timeframe = '15m'
-        self.test_mode = True
-        self.data_points = 96
-        self.ai_provider = 'qwen'
-        self.contract_size = 0.01  # BTC合约乘数
-        self.min_amount = 0.01
+        # ==================== 基础交易配置 ====================
+        self.symbol = 'BTC/USDT:USDT'  # 交易对：BTC永续合约，USDT结算
+        self.leverage = 10              # 杠杆倍数：10倍杠杆
+        self.timeframe = '15m'          # K线周期：15分钟周期（用于技术分析）
+        self.test_mode = True           # 模拟盘模式：True=模拟盘, False=实盘（生产环境需谨慎）
+        
+        # ==================== 数据获取配置 ====================
+        self.data_points = 96           # 历史数据点数：96个15分钟K线 = 24小时数据
+        
+        # ==================== AI配置 ====================
+        self.ai_provider = 'qwen'       # AI提供商：'qwen'=通义千问, 'deepseek'=DeepSeek
+        
+        # ==================== 合约规格配置 ====================
+        self.contract_size = 0.01       # BTC合约乘数：每张合约代表0.01个BTC（由交易所API动态获取）
+        self.min_amount = 0.01          # 最小交易量：0.01张合约（由交易所限制决定）
 
-        # 分析周期配置
+        # ==================== 分析周期配置 ====================
+        # 用于多时间框架技术分析的周期设置
         self.analysis_periods = {
-            'short_term': 21,
-            'medium_term': 55,
-            'long_term': 89
+            'short_term': 21,   # 短期均线周期：21个K线点（约5.25小时）
+            'medium_term': 55,  # 中期均线周期：55个K线点（约13.75小时）
+            'long_term': 89     # 长期均线周期：89个K线点（约22.25小时）
         }
 
-        # 仓位管理配置
+        # ==================== 智能仓位管理配置 ====================
+        # 根据信号信心度、趋势强度、市场波动等因素动态调整仓位大小
         self.position_management = {
-            'enable_intelligent_position': False,
-            'base_usdt_amount': 100,
-            'high_confidence_multiplier': 1.5,
-            'medium_confidence_multiplier': 1.0,
-            'low_confidence_multiplier': 0.5,
-            'max_position_ratio': 0.1,  # 改为比例更合理
-            'trend_strength_multiplier': 1.2
+            # 核心开关
+            'enable_intelligent_position': True,  # 启用智能仓位：True=根据信心度调整, False=固定仓位
+            
+            # 基础仓位配置
+            'base_usdt_amount': 50,               # 基础下单金额：50 USDT作为基础单位（可根据账户资金调整）
+            
+            # 信心度乘数（根据AI给出的信心等级调整仓位）
+            'high_confidence_multiplier': 2.0,    # 高信心乘数：HIGH信心时仓位翻倍（50*2=100 USDT）
+            'medium_confidence_multiplier': 1.0,  # 中等信心乘数：MEDIUM信心保持基础仓位（50*1=50 USDT）
+            'low_confidence_multiplier': 0.3,     # 低信心乘数：LOW信心减仓到30%（50*0.3=15 USDT）
+            
+            # 风险控制
+            'max_position_ratio': 0.15,           # 最大仓位比例：单次开仓不超过账户余额的15%
+            
+            # 市场状态乘数（根据市场条件进一步微调）
+            'trend_strength_multiplier': 1.5,     # 趋势强度乘数：强势趋势时增加50%仓位
+            'volatility_multiplier': 0.8,         # 波动率乘数：高波动时减少20%仓位（降低风险）
+            'rsi_extreme_multiplier': 0.5         # RSI极端值乘数：RSI>75或<25时减半仓位（避免追高杀跌）
         }
 
 
@@ -220,6 +248,10 @@ class TechnicalAnalyzer:
             # 移动平均线
             for window in [5, 20, 50, 60]:
                 df[f'sma_{window}'] = df['close'].rolling(window=window, min_periods=1).mean()
+            
+            # EMA指标
+            df['ema_20'] = df['close'].ewm(span=20).mean()
+            df['ema_50'] = df['close'].ewm(span=50).mean()
 
             # MACD
             df['ema_12'] = df['close'].ewm(span=12).mean()
@@ -228,12 +260,13 @@ class TechnicalAnalyzer:
             df['macd_signal'] = df['macd'].ewm(span=9).mean()
             df['macd_histogram'] = df['macd'] - df['macd_signal']
 
-            # RSI
-            delta = df['close'].diff()
-            gain = (delta.where(delta > 0, 0)).rolling(14).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-            rs = gain / loss
-            df['rsi'] = 100 - (100 / (1 + rs))
+            # RSI - 多个周期
+            for period in [7, 14]:
+                delta = df['close'].diff()
+                gain = (delta.where(delta > 0, 0)).rolling(period).mean()
+                loss = (-delta.where(delta < 0, 0)).rolling(period).mean()
+                rs = gain / loss
+                df[f'rsi_{period}'] = 100 - (100 / (1 + rs))
 
             # 布林带
             df['bb_middle'] = df['close'].rolling(20).mean()
@@ -245,6 +278,17 @@ class TechnicalAnalyzer:
             # 成交量分析
             df['volume_ma'] = df['volume'].rolling(20).mean()
             df['volume_ratio'] = df['volume'] / df['volume_ma']
+
+            # ATR (平均真实范围)
+            high_low = df['high'] - df['low']
+            high_close = abs(df['high'] - df['close'].shift())
+            low_close = abs(df['low'] - df['close'].shift())
+            true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+            df['atr_3'] = true_range.rolling(3).mean()
+            df['atr_14'] = true_range.rolling(14).mean()
+
+            # 波动率计算
+            df['volatility'] = df['close'].pct_change().rolling(20).std()
 
             # 支撑阻力位
             df['resistance'] = df['high'].rolling(20).max()
@@ -263,8 +307,8 @@ class TechnicalAnalyzer:
             current_price = df['close'].iloc[-1]
 
             # 多时间框架趋势分析
-            trend_short = "上涨" if current_price > df['sma_20'].iloc[-1] else "下跌"
-            trend_medium = "上涨" if current_price > df['sma_50'].iloc[-1] else "下跌"
+            trend_short = "上涨" if current_price > df['ema_20'].iloc[-1] else "下跌"
+            trend_medium = "上涨" if current_price > df['ema_50'].iloc[-1] else "下跌"
 
             # MACD趋势
             macd_trend = "bullish" if df['macd'].iloc[-1] > df['macd_signal'].iloc[-1] else "bearish"
@@ -282,7 +326,9 @@ class TechnicalAnalyzer:
                 'medium_term': trend_medium,
                 'macd': macd_trend,
                 'overall': overall_trend,
-                'rsi_level': df['rsi'].iloc[-1]
+                'rsi_7': df['rsi_7'].iloc[-1],
+                'rsi_14': df['rsi_14'].iloc[-1],
+                'volatility': df['volatility'].iloc[-1] if 'volatility' in df else 0
             }
         except Exception as e:
             logger.error(f"趋势分析失败: {e}")
@@ -412,23 +458,39 @@ class PositionManager:
 
             logger.info(f"💰 可用USDT余额: {usdt_balance:.2f}, 下单基数{base_usdt}")
 
-            # 信心程度调整
+            # 1. 信心程度调整
             confidence_multiplier = {
                 'HIGH': config['high_confidence_multiplier'],
                 'MEDIUM': config['medium_confidence_multiplier'],
                 'LOW': config['low_confidence_multiplier']
             }.get(signal_data['confidence'], 1.0)
 
-            # 趋势强度调整
+            # 2. 趋势强度调整
             trend = price_data['trend_analysis'].get('overall', '震荡整理')
             trend_multiplier = config['trend_strength_multiplier'] if trend in ['强势上涨', '强势下跌'] else 1.0
 
-            # RSI状态调整
-            rsi = price_data['technical_data'].get('rsi', 50)
-            rsi_multiplier = 0.7 if rsi > 75 or rsi < 25 else 1.0
+            # 3. RSI状态调整
+            rsi = price_data['technical_data'].get('rsi_7', 50)
+            rsi_multiplier = config.get('rsi_extreme_multiplier', 0.5) if rsi > 80 or rsi < 20 else 1.0
+
+            # 4. 波动率调整
+            volatility = price_data['trend_analysis'].get('volatility', 0.02)
+            volatility_multiplier = max(0.3, min(1.0, 1 - (volatility * 10)))  # 波动率越高，仓位越小
+
+            # 5. 当前持仓调整
+            position_multiplier = 1.0
+            if current_position:
+                # 如果信号方向与当前持仓相同，可以考虑加仓
+                if (signal_data['signal'] == 'BUY' and current_position['side'] == 'long') or \
+                   (signal_data['signal'] == 'SELL' and current_position['side'] == 'short'):
+                    position_multiplier = 1.2  # 同向加仓
+                else:
+                    position_multiplier = 0.8  # 反向减仓
 
             # 计算建议投入金额
-            suggested_usdt = base_usdt * confidence_multiplier * trend_multiplier * rsi_multiplier
+            suggested_usdt = base_usdt * confidence_multiplier * trend_multiplier * rsi_multiplier * volatility_multiplier * position_multiplier
+            
+            # 风险控制：最大仓位限制
             max_usdt = usdt_balance * config['max_position_ratio']
             final_usdt = min(suggested_usdt, max_usdt)
 
@@ -441,7 +503,14 @@ class PositionManager:
                 contract_size = self.config.min_amount
                 logger.warning(f"⚠️ 仓位小于最小值，调整为: {contract_size} 张")
 
-            logger.info(f"🎯 最终仓位: {final_usdt:.2f} USDT → {contract_size:.2f} 张合约")
+            logger.info(f"🎯 仓位计算详情:")
+            logger.info(f"   - 信心乘数: {confidence_multiplier}")
+            logger.info(f"   - 趋势乘数: {trend_multiplier}")
+            logger.info(f"   - RSI乘数: {rsi_multiplier}")
+            logger.info(f"   - 波动率乘数: {volatility_multiplier:.2f}")
+            logger.info(f"   - 持仓乘数: {position_multiplier}")
+            logger.info(f"   - 最终仓位: {final_usdt:.2f} USDT → {contract_size:.2f} 张合约")
+
             return contract_size
 
         except Exception as e:
@@ -490,7 +559,8 @@ class TradingBot:
             'signal': signal_data['signal'],
             'price': executed_price,
             'pnl': pnl,
-            'confidence': signal_data['confidence']
+            'confidence': signal_data['confidence'],
+            'position_size': signal_data.get('position_size', 0)
         }
         self.trade_performance['trade_history'].append(trade_record)
 
@@ -515,6 +585,12 @@ class TradingBot:
         logger.info(f"胜率: {win_rate:.2f}%")
         logger.info(f"总盈亏: {self.trade_performance['total_pnl']:.2f} USDT")
         logger.info(f"平均盈亏: {avg_pnl:.2f} USDT")
+        
+        # 添加仓位统计
+        if self.trade_performance['trade_history']:
+            avg_position_size = sum(t['position_size'] for t in self.trade_performance['trade_history']) / len(self.trade_performance['trade_history'])
+            logger.info(f"平均仓位: {avg_position_size:.2f} 张")
+        
         logger.info("=" * 50)
 
     def get_btc_ohlcv_enhanced(self) -> Optional[Dict]:
@@ -553,14 +629,20 @@ class TradingBot:
                     'sma_20': current_data.get('sma_20', 0),
                     'sma_50': current_data.get('sma_50', 0),
                     'sma_60': current_data.get('sma_60', 0),
-                    'rsi': current_data.get('rsi', 0),
+                    'ema_20': current_data.get('ema_20', 0),
+                    'ema_50': current_data.get('ema_50', 0),
+                    'rsi_7': current_data.get('rsi_7', 0),
+                    'rsi_14': current_data.get('rsi_14', 0),
                     'macd': current_data.get('macd', 0),
                     'macd_signal': current_data.get('macd_signal', 0),
                     'macd_histogram': current_data.get('macd_histogram', 0),
                     'bb_upper': current_data.get('bb_upper', 0),
                     'bb_lower': current_data.get('bb_lower', 0),
                     'bb_position': current_data.get('bb_position', 0),
-                    'volume_ratio': current_data.get('volume_ratio', 0)
+                    'volume_ratio': current_data.get('volume_ratio', 0),
+                    'atr_3': current_data.get('atr_3', 0),
+                    'atr_14': current_data.get('atr_14', 0),
+                    'volatility': current_data.get('volatility', 0)
                 },
                 'trend_analysis': trend_analysis,
                 'levels_analysis': levels_analysis,
@@ -570,8 +652,41 @@ class TradingBot:
             logger.error(f"获取增强K线数据失败: {e}")
             return None
 
+    def get_btc_4h_ohlcv_enhanced(self) -> Optional[Dict]:
+        """获取4小时K线数据用于长期背景分析"""
+        try:
+            ohlcv = self.exchange_manager.exchange.fetch_ohlcv(
+                self.config.symbol,
+                '4h',  # 4小时时间框架
+                limit=96  # 获取足够的数据点
+            )
+
+            df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+
+            # 计算技术指标
+            df = self.technical_analyzer.calculate_technical_indicators(df)
+
+            current_data = df.iloc[-1]
+
+            return {
+                'price': current_data['close'],
+                'volume': current_data['volume'],
+                'technical_data': {
+                    'ema_20': current_data.get('ema_20', 0),
+                    'ema_50': current_data.get('ema_50', 0),
+                    'atr_3': current_data.get('atr_3', 0),
+                    'atr_14': current_data.get('atr_14', 0),
+                    'volume_ma': current_data.get('volume_ma', 0)
+                },
+                'full_data': df
+            }
+        except Exception as e:
+            logger.error(f"获取4小时K线数据失败: {e}")
+            return None
+
     def generate_technical_analysis_text(self, price_data: Dict) -> str:
-        """生成技术分析文本"""
+        """生成技术分析文本 - 使用真实数据"""
         if 'technical_data' not in price_data:
             return "技术指标数据不可用"
 
@@ -582,29 +697,82 @@ class TradingBot:
         def safe_float(value, default=0):
             return float(value) if value and pd.notna(value) else default
 
+        # 获取真实序列数据
+        full_data = price_data.get('full_data', pd.DataFrame())
+        if not full_data.empty:
+            # 使用真实的收盘价序列
+            mid_price_series = [round(x, 2) for x in full_data['close'].tail(10).tolist()]
+            ema_20_series = [round(x, 3) for x in full_data['ema_20'].tail(10).tolist()]
+            macd_series = [round(x, 3) for x in full_data['macd'].tail(10).tolist()]
+            rsi_7_series = [round(x, 3) for x in full_data['rsi_7'].tail(10).tolist()]
+            rsi_14_series = [round(x, 3) for x in full_data['rsi_14'].tail(10).tolist()]
+        else:
+            # 如果数据为空，使用中性值
+            current_price = price_data['price']
+            mid_price_series = [current_price] * 10
+            ema_20_series = [current_price] * 10
+            macd_series = [0] * 10
+            rsi_7_series = [50] * 10
+            rsi_14_series = [50] * 10
+
+        # 获取4小时真实数据
+        h4_data = self.get_btc_4h_ohlcv_enhanced()
+        if h4_data and not h4_data.get('full_data', pd.DataFrame()).empty:
+            h4_full_data = h4_data['full_data']
+            h4_ema_20 = safe_float(h4_data['technical_data'].get('ema_20', 0))
+            h4_ema_50 = safe_float(h4_data['technical_data'].get('ema_50', 0))
+            h4_atr_3 = safe_float(h4_data['technical_data'].get('atr_3', 0))
+            h4_atr_14 = safe_float(h4_data['technical_data'].get('atr_14', 0))
+            h4_volume = safe_float(h4_data.get('volume', 0))
+            h4_volume_avg = safe_float(h4_data['technical_data'].get('volume_ma', 0))
+            h4_macd_series = [round(x, 3) for x in h4_full_data['macd'].tail(10).tolist()]
+            h4_rsi_14_series = [round(x, 3) for x in h4_full_data['rsi_14'].tail(10).tolist()]
+        else:
+            # 使用当前时间框架数据作为备用
+            h4_ema_20 = safe_float(tech['ema_20'])
+            h4_ema_50 = safe_float(tech['ema_50'])
+            h4_atr_3 = safe_float(tech['atr_3'])
+            h4_atr_14 = safe_float(tech['atr_14'])
+            h4_volume = safe_float(price_data.get('volume', 0))
+            h4_volume_avg = safe_float(tech.get('volume_ma', 0))
+            h4_macd_series = macd_series
+            h4_rsi_14_series = rsi_14_series
+
         analysis_text = f"""
-        【技术指标分析】
-        📈 移动平均线:
-        - 5周期: {safe_float(tech['sma_5']):.2f} | 价格相对: {(price_data['price'] - safe_float(tech['sma_5'])) / safe_float(tech['sma_5']) * 100:+.2f}%
-        - 20周期: {safe_float(tech['sma_20']):.2f} | 价格相对: {(price_data['price'] - safe_float(tech['sma_20'])) / safe_float(tech['sma_20']) * 100:+.2f}%
-        - 60周期: {safe_float(tech['sma_60']):.2f} | 价格相对: {(price_data['price'] - safe_float(tech['sma_60'])) / safe_float(tech['sma_60']) * 100:+.2f}%
+【当前市场状态】
+当前价格 = {price_data['price']:,.2f}
+当前20周期EMA = {safe_float(tech['ema_20']):.3f}
+当前MACD = {safe_float(tech['macd']):.3f}
+当前RSI（7周期）= {safe_float(tech['rsi_7']):.3f}
+当前波动率 = {safe_float(tech.get('volatility', 0)):.4f}
 
-        🎯 趋势分析:
-        - 短期趋势: {trend.get('short_term', 'N/A')}
-        - 中期趋势: {trend.get('medium_term', 'N/A')}
-        - 整体趋势: {trend.get('overall', 'N/A')}
-        - MACD方向: {trend.get('macd', 'N/A')}
+【日内序列数据（按{self.config.timeframe}，从旧到新）】
+中间价格：
+{mid_price_series}
+EMA指标（20周期）：
+{ema_20_series}
+MACD指标：
+{macd_series}
+RSI指标（7周期）：
+{rsi_7_series}
+RSI指标（14周期）：
+{rsi_14_series}
 
-        📊 动量指标:
-        - RSI: {safe_float(tech['rsi']):.2f} ({'超买' if safe_float(tech['rsi']) > 70 else '超卖' if safe_float(tech['rsi']) < 30 else '中性'})
-        - MACD: {safe_float(tech['macd']):.4f}
-        - 信号线: {safe_float(tech['macd_signal']):.4f}
+【长期背景数据（4小时时间框架）】
+20周期EMA：{h4_ema_20:,.3f} vs. 50周期EMA：{h4_ema_50:,.3f}
+3周期ATR：{h4_atr_3:.3f} vs. 14周期ATR：{h4_atr_14:.3f}
+当前成交量：{h4_volume:,.3f} vs. 平均成交量：{h4_volume_avg:,.3f}
+MACD指标：
+{h4_macd_series}
+RSI指标（14周期）：
+{h4_rsi_14_series}
 
-        🎚️ 布林带位置: {safe_float(tech['bb_position']):.2%} ({'上部' if safe_float(tech['bb_position']) > 0.7 else '下部' if safe_float(tech['bb_position']) < 0.3 else '中部'})
-
-        💰 关键水平:
-        - 静态阻力: {safe_float(levels.get('static_resistance', 0)):.2f}
-        - 静态支撑: {safe_float(levels.get('static_support', 0)):.2f}
+【趋势分析】
+短期趋势: {trend.get('short_term', 'N/A')}
+中期趋势: {trend.get('medium_term', 'N/A')}
+整体趋势: {trend.get('overall', 'N/A')}
+MACD方向: {trend.get('macd', 'N/A')}
+RSI状态: {safe_float(tech['rsi_7']):.1f} ({'超买' if safe_float(tech['rsi_7']) > 70 else '超卖' if safe_float(tech['rsi_7']) < 30 else '中性'})
         """
         return analysis_text
 
@@ -682,9 +850,10 @@ class TradingBot:
 
         # 提取关键数据用于决策
         current_price = price_data['price']
-        rsi = price_data['technical_data'].get('rsi', 50)
+        rsi = price_data['technical_data'].get('rsi_7', 50)
         trend = price_data['trend_analysis'].get('overall', '震荡整理')
         macd_trend = price_data['trend_analysis'].get('macd', 'neutral')
+        volatility = price_data['technical_data'].get('volatility', 0.02)
 
         return f"""
 # 角色设定
@@ -695,6 +864,7 @@ class TradingBot:
 - 时间: {price_data['timestamp']}
 - 价格变化: {price_data['price_change']:+.2f}%
 - 当前持仓: {position_text}{pnl_text}
+- 市场波动率: {volatility:.4f}
 
 ## 技术分析核心指标
 {technical_analysis}
@@ -792,6 +962,7 @@ class TradingBot:
 **趋势状态**: {trend}
 **RSI位置**: {rsi:.1f} ({'超买' if rsi > 70 else '超卖' if rsi < 30 else '中性'})
 **MACD方向**: {macd_trend}
+**波动率**: {volatility:.4f} ({'高波动' if volatility > 0.03 else '低波动' if volatility < 0.01 else '正常波动'})
 **价格位置**: ${current_price:,.2f}
 
 # 输出要求
@@ -909,6 +1080,9 @@ class TradingBot:
         position_size = self.position_manager.calculate_intelligent_position(
             signal_data, price_data, current_position
         )
+
+        # 将仓位大小添加到信号数据中，用于性能统计
+        signal_data['position_size'] = position_size
 
         logger.info(f"🎯 交易信号: {signal_data['signal']}")
         logger.info(f"📊 信心程度: {signal_data['confidence']}")
@@ -1159,6 +1333,7 @@ class TradingBot:
 
         logger.info(f"交易周期: {self.config.timeframe}")
         logger.info("已启用完整技术指标分析和持仓跟踪功能")
+        logger.info("🎯 智能仓位管理已启用 - 仓位将根据市场条件动态调整")
 
         # 设置交易所
         if not self.exchange_manager.setup_exchange():
