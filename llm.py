@@ -40,7 +40,7 @@ class TradingConfig:
     def __init__(self):
         # ==================== 基础交易配置 ====================
         self.symbol = 'BTC/USDT:USDT'  # 交易对：BTC永续合约，USDT结算
-        self.leverage = 10              # 杠杆倍数：10倍杠杆
+        self.leverage = 15              # 杠杆倍数：15倍杠杆
         self.timeframe = '15m'          # K线周期：15分钟周期（用于技术分析）
         self.test_mode = True           # 模拟盘模式：True=模拟盘, False=实盘（生产环境需谨慎）
         
@@ -69,7 +69,7 @@ class TradingConfig:
             'enable_intelligent_position': False,  # 启用智能仓位：True=根据信心度调整, False=固定仓位
             
             # 固定仓位配置（当智能仓位关闭时使用）
-            'fixed_contracts': 0.1,               # 固定仓位大小：0.1张合约（约等于0.001 BTC）
+            'fixed_contracts': 0.5,               # 固定仓位大小：0.5张合约（约等于0.005 BTC）
             
             # 基础仓位配置（当智能仓位开启时使用）
             'base_usdt_amount': 50,               # 基础下单金额：50 USDT作为基础单位（可根据账户资金调整）
