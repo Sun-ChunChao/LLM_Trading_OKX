@@ -587,9 +587,9 @@ class TradingBot:
         win_rate = (self.trade_performance['winning_trades'] / self.trade_performance['total_trades']) * 100
         avg_pnl = self.trade_performance['total_pnl'] / self.trade_performance['total_trades']
 
-        logger.info("\n" + "=" * 50)
+        logger.info("\n" + "=" * 30)
         logger.info("📈 策略性能总结")
-        logger.info("=" * 50)
+        logger.info("=" * 30)
         logger.info(f"总交易次数: {self.trade_performance['total_trades']}")
         logger.info(f"盈利交易: {self.trade_performance['winning_trades']}")
         logger.info(f"亏损交易: {self.trade_performance['losing_trades']}")
@@ -602,7 +602,7 @@ class TradingBot:
             avg_position_size = sum(t['position_size'] for t in self.trade_performance['trade_history']) / len(self.trade_performance['trade_history'])
             logger.info(f"平均仓位: {avg_position_size:.2f} 张")
         
-        logger.info("=" * 50)
+        logger.info("=" * 30)
 
     def get_btc_ohlcv_enhanced(self) -> Optional[Dict]:
         """获取增强版K线数据"""
@@ -1327,9 +1327,9 @@ RSI状态: {safe_float(tech['rsi_7']):.1f} ({'超买' if safe_float(tech['rsi_7'
         if wait_seconds > 0:
             time.sleep(wait_seconds)
 
-        logger.info("\n" + "=" * 60)
+        logger.info("\n" + "=" * 30)
         logger.info(f"执行时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        logger.info("=" * 60)
+        logger.info("=" * 30)
 
         # 1. 获取增强版K线数据
         price_data = self.get_btc_ohlcv_enhanced()
