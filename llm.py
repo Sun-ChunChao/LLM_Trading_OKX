@@ -66,9 +66,12 @@ class TradingConfig:
         # 根据信号信心度、趋势强度、市场波动等因素动态调整仓位大小
         self.position_management = {
             # 核心开关
-            'enable_intelligent_position': True,  # 启用智能仓位：True=根据信心度调整, False=固定仓位
+            'enable_intelligent_position': False,  # 启用智能仓位：True=根据信心度调整, False=固定仓位
             
-            # 基础仓位配置
+            # 固定仓位配置（当智能仓位关闭时使用）
+            'fixed_contracts': 0.1,               # 固定仓位大小：0.1张合约（约等于0.001 BTC）
+            
+            # 基础仓位配置（当智能仓位开启时使用）
             'base_usdt_amount': 50,               # 基础下单金额：50 USDT作为基础单位（可根据账户资金调整）
             
             # 信心度乘数（根据AI给出的信心等级调整仓位）
@@ -302,7 +305,7 @@ class TechnicalAnalyzer:
 
     @staticmethod
     def get_market_trend(df: pd.DataFrame) -> Dict[str, Any]:
-        """判断市场趋势"""
+        """判断市场趋势 - 优化版：更积极识别趋势"""
         try:
             current_price = df['close'].iloc[-1]
 
@@ -313,10 +316,16 @@ class TechnicalAnalyzer:
             # MACD趋势
             macd_trend = "bullish" if df['macd'].iloc[-1] > df['macd_signal'].iloc[-1] else "bearish"
 
-            # 综合趋势判断
-            if trend_short == "上涨" and trend_medium == "上涨":
+            # 计算趋势强度（均线斜率）
+            ema_20_slope = (df['ema_20'].iloc[-1] - df['ema_20'].iloc[-5]) / df['ema_20'].iloc[-5]
+            ema_50_slope = (df['ema_50'].iloc[-1] - df['ema_50'].iloc[-10]) / df['ema_50'].iloc[-10]
+            trend_strength = abs(ema_20_slope) + abs(ema_50_slope)
+
+            # 🔥 优化：更积极的趋势判断
+            # 只要主趋势明确或短期趋势配合MACD，就判定为强势
+            if trend_short == "上涨" or (trend_medium == "上涨" and macd_trend == "bullish"):
                 overall_trend = "强势上涨"
-            elif trend_short == "下跌" and trend_medium == "下跌":
+            elif trend_short == "下跌" or (trend_medium == "下跌" and macd_trend == "bearish"):
                 overall_trend = "强势下跌"
             else:
                 overall_trend = "震荡整理"
@@ -328,7 +337,8 @@ class TechnicalAnalyzer:
                 'overall': overall_trend,
                 'rsi_7': df['rsi_7'].iloc[-1],
                 'rsi_14': df['rsi_14'].iloc[-1],
-                'volatility': df['volatility'].iloc[-1] if 'volatility' in df else 0
+                'volatility': df['volatility'].iloc[-1] if 'volatility' in df else 0,
+                'trend_strength': trend_strength  # 新增：趋势强度指标
             }
         except Exception as e:
             logger.error(f"趋势分析失败: {e}")
@@ -445,10 +455,11 @@ class PositionManager:
         """计算智能仓位大小"""
         config = self.config.position_management
 
-        # 如果禁用智能仓位，使用固定仓位
+        # 如果禁用智能仓位，使用固定仓位（从配置读取）
         if not config.get('enable_intelligent_position', True):
-            fixed_contracts = 0.1
+            fixed_contracts = config.get('fixed_contracts', 0.1)
             logger.info(f"🔧 智能仓位已禁用，使用固定仓位: {fixed_contracts} 张")
+            logger.info(f"   固定仓位价值约: {fixed_contracts * price_data['price'] * self.config.contract_size:.2f} USDT")
             return fixed_contracts
 
         try:
@@ -897,25 +908,43 @@ RSI状态: {safe_float(tech['rsi_7']):.1f} ({'超买' if safe_float(tech['rsi_7'
 - 突破前高/前低 + 成交量放大 = 高信心信号
 - 支撑阻力测试 + 反转形态 = 潜在反转信号
 
-## 2. 信号生成规则
+## 2. 信号生成规则【优化版 - 更积极的交易策略】
 
-### 🔴 高信心BUY条件（需满足至少2项）:
-1. 多头排列 + RSI < 65
-2. 价格突破关键阻力 + 成交量放大  
-3. MACD金叉 + 趋势向上
-4. 情绪积极 + 技术面配合
+### 🔴 BUY条件（满足任一即可开仓，满足越多信心越高）:
+1. **价格站上20EMA**，且20EMA有向上趋势（趋势确认）
+2. **MACD金叉**或MACD > 0且持续上升（动量确认）
+3. **RSI从超卖区(<30)反弹**至30-50区间（超卖反弹）
+4. **价格突破近期阻力位**且收盘站稳（突破确认）
+5. **成交量放大** + 阳线收盘（量价配合）
 
-### 🔵 高信心SELL条件（需满足至少2项）:
-1. 空头排列 + RSI > 35
-2. 价格跌破关键支撑 + 成交量放大
-3. MACD死叉 + 趋势向下  
-4. 情绪消极 + 技术面配合
+**信心等级判断**：
+- 满足3项及以上 → **HIGH**（强烈买入信号）
+- 满足2项 → **MEDIUM**（中等买入信号）
+- 满足1项但趋势明确（强势上涨） → **LOW**（仍可交易，小仓位）
 
-### 🟡 HOLD条件:
-1. 均线纠缠，无明确方向
-2. 价格在关键位置徘徊，等待突破
-3. 技术指标矛盾，需要更多确认
-4. 持仓与当前趋势一致，无需调整
+### 🔵 SELL条件（满足任一即可开仓，满足越多信心越高）:
+1. **价格跌破20EMA**，且20EMA有向下趋势（趋势确认）
+2. **MACD死叉**或MACD < 0且持续下降（动量确认）
+3. **RSI从超买区(>70)回落**至50-70区间（超买回落）
+4. **价格跌破近期支撑位**且收盘确认（跌破确认）
+5. **成交量放大** + 阴线收盘（量价配合）
+
+**信心等级判断**：
+- 满足3项及以上 → **HIGH**（强烈卖出信号）
+- 满足2项 → **MEDIUM**（中等卖出信号）
+- 满足1项但趋势明确（强势下跌） → **LOW**（仍可交易，小仓位）
+
+### 🟡 HOLD条件（必须同时满足以下大部分条件才选择HOLD）:
+1. **价格在20EMA和50EMA之间反复穿插**（真正的震荡，非单边）
+2. **MACD在零轴附近反复金叉死叉**（无明确方向）
+3. **RSI在40-60区间横盘震荡**（无动量突破）
+4. **成交量极度萎缩**（<平均成交量的50%）
+5. **短期和中期趋势完全矛盾**
+
+⚠️ **重要原则**：
+- **趋势优先**：当市场处于"强势上涨"或"强势下跌"时，即使只满足1个BUY/SELL条件，也应该选择跟随趋势交易，而非HOLD！
+- **HOLD是例外不是常态**：只有在真正无法判断方向时才HOLD，不要因为谨慎而错过明确的趋势机会
+- **持仓管理**：如果已有持仓且与当前趋势一致，可以HOLD保持现状；但如果趋势反转，必须果断平仓反向
 
 ## 3. 风险管理规则
 
@@ -1002,7 +1031,7 @@ RSI状态: {safe_float(tech['rsi_7']):.1f} ({'超买' if safe_float(tech['rsi_7'
                     {"role": "user", "content": prompt}
                 ],
                 stream=False,
-                temperature=0.1
+                temperature=0.2
             )
 
             result = response.choices[0].message.content
