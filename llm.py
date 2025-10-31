@@ -40,7 +40,7 @@ class TradingConfig:
     def __init__(self):
         # ==================== 基础交易配置 ====================
         self.symbol = 'BTC/USDT:USDT'  # 交易对：BTC永续合约，USDT结算
-        self.leverage = 15              # 杠杆倍数：15倍杠杆
+        self.leverage = 50              # 杠杆倍数：50倍杠杆
         self.timeframe = '15m'          # K线周期：15分钟周期（用于技术分析）
         self.test_mode = True           # 模拟盘模式：True=模拟盘, False=实盘（生产环境需谨慎）
         
@@ -66,7 +66,7 @@ class TradingConfig:
         # 根据信号信心度、趋势强度、市场波动等因素动态调整仓位大小
         self.position_management = {
             # 核心开关
-            'enable_intelligent_position': False,  # 启用智能仓位：True=根据信心度调整, False=固定仓位
+            'enable_intelligent_position': True,  # 启用智能仓位：True=根据信心度调整, False=固定仓位
             
             # 固定仓位配置（当智能仓位关闭时使用）
             'fixed_contracts': 0.5,               # 固定仓位大小：0.5张合约（约等于0.005 BTC）
@@ -1352,7 +1352,6 @@ RSI状态: {safe_float(tech['rsi_7']):.1f} ({'超买' if safe_float(tech['rsi_7'
     def main(self):
         """主函数"""
         logger.info("BTC/USDT OKX自动交易机器人启动成功！")
-        logger.info("🎯 模拟盘策略测试模式 - 真实执行模拟交易")
 
         if self.config.test_mode:
             logger.info("✅ 当前为模拟盘模式，将执行真实模拟交易")
@@ -1361,8 +1360,6 @@ RSI状态: {safe_float(tech['rsi_7']):.1f} ({'超买' if safe_float(tech['rsi_7'
             logger.info("🚨 实盘交易模式，请谨慎操作！")
 
         logger.info(f"交易周期: {self.config.timeframe}")
-        logger.info("已启用完整技术指标分析和持仓跟踪功能")
-        logger.info("🎯 智能仓位管理已启用 - 仓位将根据市场条件动态调整")
 
         # 设置交易所
         if not self.exchange_manager.setup_exchange():
