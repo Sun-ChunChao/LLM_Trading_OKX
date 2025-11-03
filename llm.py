@@ -704,7 +704,7 @@ def execute_intelligent_trade(signal_data, price_data):
                     # 平空仓
                     exchange.create_market_order(
                         TRADE_CONFIG['symbol'],
-                        'buy',
+                        'sell',
                         current_position['size'],
                         params={'reduceOnly': True}
                     )
@@ -712,7 +712,7 @@ def execute_intelligent_trade(signal_data, price_data):
                     # 开多仓
                     exchange.create_market_order(
                         TRADE_CONFIG['symbol'],
-                        'buy',
+                        'sell',
                         position_size,
                         params={}
                     )
@@ -720,7 +720,7 @@ def execute_intelligent_trade(signal_data, price_data):
                     print("⚠️ 检测到空头持仓但数量为0，直接开多仓")
                     exchange.create_market_order(
                         TRADE_CONFIG['symbol'],
-                        'buy',
+                        'sell',
                         position_size,
                         params={}
                     )
@@ -737,7 +737,7 @@ def execute_intelligent_trade(signal_data, price_data):
                             f"多仓加仓 {add_size:.2f} 张 (当前:{current_position['size']:.2f} → 目标:{position_size:.2f})")
                         exchange.create_market_order(
                             TRADE_CONFIG['symbol'],
-                            'buy',
+                            'sell',
                             add_size,
                             params={}
                         )
@@ -748,7 +748,7 @@ def execute_intelligent_trade(signal_data, price_data):
                             f"多仓减仓 {reduce_size:.2f} 张 (当前:{current_position['size']:.2f} → 目标:{position_size:.2f})")
                         exchange.create_market_order(
                             TRADE_CONFIG['symbol'],
-                            'sell',
+                            'buy',
                             reduce_size,
                             params={'reduceOnly': True}
                         )
@@ -760,7 +760,7 @@ def execute_intelligent_trade(signal_data, price_data):
                 print(f"开多仓 {position_size:.2f} 张...")
                 exchange.create_market_order(
                     TRADE_CONFIG['symbol'],
-                    'buy',
+                    'sell',
                     position_size,
                     params={}
                 )
@@ -773,7 +773,7 @@ def execute_intelligent_trade(signal_data, price_data):
                     # 平多仓
                     exchange.create_market_order(
                         TRADE_CONFIG['symbol'],
-                        'sell',
+                        'buy',
                         current_position['size'],
                         params={'reduceOnly': True}
                     )
@@ -781,7 +781,7 @@ def execute_intelligent_trade(signal_data, price_data):
                     # 开空仓
                     exchange.create_market_order(
                         TRADE_CONFIG['symbol'],
-                        'sell',
+                        'buy',
                         position_size,
                         params={}
                     )
@@ -789,7 +789,7 @@ def execute_intelligent_trade(signal_data, price_data):
                     print("⚠️ 检测到多头持仓但数量为0，直接开空仓")
                     exchange.create_market_order(
                         TRADE_CONFIG['symbol'],
-                        'sell',
+                        'buy',
                         position_size,
                         params={}
                     )
@@ -806,7 +806,7 @@ def execute_intelligent_trade(signal_data, price_data):
                             f"空仓加仓 {add_size:.2f} 张 (当前:{current_position['size']:.2f} → 目标:{position_size:.2f})")
                         exchange.create_market_order(
                             TRADE_CONFIG['symbol'],
-                            'sell',
+                            'buy',
                             add_size,
                             params={}
                         )
@@ -817,7 +817,7 @@ def execute_intelligent_trade(signal_data, price_data):
                             f"空仓减仓 {reduce_size:.2f} 张 (当前:{current_position['size']:.2f} → 目标:{position_size:.2f})")
                         exchange.create_market_order(
                             TRADE_CONFIG['symbol'],
-                            'buy',
+                            'sell',
                             reduce_size,
                             params={'reduceOnly': True}
                         )
@@ -829,7 +829,7 @@ def execute_intelligent_trade(signal_data, price_data):
                 print(f"开空仓 {position_size:.2f} 张...")
                 exchange.create_market_order(
                     TRADE_CONFIG['symbol'],
-                    'sell',
+                    'buy',
                     position_size,
                     params={}
                 )
