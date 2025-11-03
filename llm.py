@@ -704,7 +704,7 @@ def execute_intelligent_trade(signal_data, price_data):
                     # 平空仓
                     exchange.create_market_order(
                         TRADE_CONFIG['symbol'],
-                        'sell',
+                        'buy',
                         current_position['size'],
                         params={'reduceOnly': True}
                     )
@@ -773,7 +773,7 @@ def execute_intelligent_trade(signal_data, price_data):
                     # 平多仓
                     exchange.create_market_order(
                         TRADE_CONFIG['symbol'],
-                        'buy',
+                        'sell',
                         current_position['size'],
                         params={'reduceOnly': True}
                     )
@@ -853,14 +853,14 @@ def execute_intelligent_trade(signal_data, price_data):
                 if signal_data['signal'] == 'BUY':
                     exchange.create_market_order(
                         TRADE_CONFIG['symbol'],
-                        'buy',
+                        'sell',
                         position_size,
                         params={}
                     )
                 elif signal_data['signal'] == 'SELL':
                     exchange.create_market_order(
                         TRADE_CONFIG['symbol'],
-                        'sell',
+                        'buy',
                         position_size,
                         params={}
                     )
